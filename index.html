@@ -812,7 +812,193 @@
       requestAnimationFrame(fitWarningIcons);
     }
   }
+/* ---- Minimal geolocation -> nearest HKO station hookup ---- */
 
+// 1) A small sample of HKO stations with rough coords.
+//    Add/expand this list for better accuracy.
+const HKO_STATIONS_LUT = [
+  { place: 'Hong Kong Observatory', lat: 22.302, lng: 114.174 },
+  { place: 'Kowloon City',         lat: 22.328, lng: 114.191 },
+  { place: 'Sha Tin',              lat: 22.382, lng: 114.191 },
+  { place: 'Tsim Bei Tsui',        lat: 22.479, lng: 113.997 },
+  { place: 'Chek Lap Kok',         lat: 22.308, lng: 113.918 },
+  { place: 'Ta Kwu Ling',          lat: 22.532, lng: 114.148 },
+  { place: 'Waglan Island',        lat: 22.181, lng: 114.303 },
+  { place: 'Tsuen Wan',            lat: 22.373, lng: 114.114 },
+  { place: 'Sai Kung',             lat: 22.383, lng: 114.270 },
+  { place: 'Yuen Long Park',       lat: 22.446, lng: 114.025 }
+];
+
+// 2) Distance helper (haversine)
+function haversineKm(a, b){
+  const toRad = (x)=> x*Math.PI/180;
+  const R = 6371;
+  const dLat = toRad(b.lat-a.lat);
+  const dLng = toRad(b.lng-a.lng);
+  const s1 = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s1));
+}
+
+// 3) Find nearest station name from LUT
+function nearestStationName(lat, lng){
+  if (!HKO_STATIONS_LUT.length) return null;
+  let best = HKO_STATIONS_LUT[0], bestD = Infinity;
+  for (const st of HKO_STATIONS_LUT){
+    const d = haversineKm({lat,lng}, {lat:st.lat, lng:st.lng});
+    if (d < bestD){ bestD = d; best = st; }
+  }
+  return best.place;
+}
+
+// 4) Ask for location, snap selection, and update UI/meta
+async function useMyLocation(){
+  if (!('geolocation' in navigator)){
+    alert('Geolocation not supported by this browser.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude, longitude} = pos.coords || {};
+    if (latitude==null || longitude==null) return;
+    const name = nearestStationName(latitude, longitude);
+    if (!name) return;
+
+    // set + persist selection
+    selectedPlace = name;
+    localStorage.setItem('hkoPlace', selectedPlace);
+
+    // update dropdown if it exists
+    const sel = document.getElementById('locSelect');
+    if (sel && [...sel.options].some(o=>o.value===name)){
+      sel.value = name;
+    }
+
+    // re-render temp line using already-fetched rhr (lastRhr)
+    renderTodayMetaWithLastData();
+  }, err=>{
+    // optional: show a gentle message or ignore
+    console.warn('Geolocation denied or failed:', err);
+  }, { enableHighAccuracy:true, timeout:8000, maximumAge:30000 });
+}
+
+// 5) Add a tiny "📍" button next to the location selector (injected, no HTML edit)
+function addLocateButton(){
+  const wrapper = document.getElementById('locWrap');
+  if (!wrapper || document.getElementById('locateBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'locateBtn';
+  btn.type = 'button';
+  btn.textContent = '📍';
+  btn.title = (LANG==='tc' ? '使用我的位置' : 'Use my location');
+  btn.style.border = '1px solid var(--border)';
+  btn.style.background = 'transparent';
+  btn.style.borderRadius = '10px';
+  btn.style.padding = '6px 10px';
+  btn.style.cursor = 'pointer';
+  btn.style.font = 'inherit';
+  btn.style.marginLeft = '2px';
+  btn.addEventListener('click', useMyLocation);
+  wrapper.appendChild(btn);
+}
+
+// Hook into your existing location builder so the button appears automatically
+const _origBuildLocationSelector = buildLocationSelector;
+buildLocationSelector = function(rhr){
+  _origBuildLocationSelector.call(this, rhr);
+  addLocateButton();
+};/* ---- Minimal geolocation -> nearest HKO station hookup ---- */
+
+// 1) A small sample of HKO stations with rough coords.
+//    Add/expand this list for better accuracy.
+const HKO_STATIONS_LUT = [
+  { place: 'Hong Kong Observatory', lat: 22.302, lng: 114.174 },
+  { place: 'Kowloon City',         lat: 22.328, lng: 114.191 },
+  { place: 'Sha Tin',              lat: 22.382, lng: 114.191 },
+  { place: 'Tsim Bei Tsui',        lat: 22.479, lng: 113.997 },
+  { place: 'Chek Lap Kok',         lat: 22.308, lng: 113.918 },
+  { place: 'Ta Kwu Ling',          lat: 22.532, lng: 114.148 },
+  { place: 'Waglan Island',        lat: 22.181, lng: 114.303 },
+  { place: 'Tsuen Wan',            lat: 22.373, lng: 114.114 },
+  { place: 'Sai Kung',             lat: 22.383, lng: 114.270 },
+  { place: 'Yuen Long Park',       lat: 22.446, lng: 114.025 }
+];
+
+// 2) Distance helper (haversine)
+function haversineKm(a, b){
+  const toRad = (x)=> x*Math.PI/180;
+  const R = 6371;
+  const dLat = toRad(b.lat-a.lat);
+  const dLng = toRad(b.lng-a.lng);
+  const s1 = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s1));
+}
+
+// 3) Find nearest station name from LUT
+function nearestStationName(lat, lng){
+  if (!HKO_STATIONS_LUT.length) return null;
+  let best = HKO_STATIONS_LUT[0], bestD = Infinity;
+  for (const st of HKO_STATIONS_LUT){
+    const d = haversineKm({lat,lng}, {lat:st.lat, lng:st.lng});
+    if (d < bestD){ bestD = d; best = st; }
+  }
+  return best.place;
+}
+
+// 4) Ask for location, snap selection, and update UI/meta
+async function useMyLocation(){
+  if (!('geolocation' in navigator)){
+    alert('Geolocation not supported by this browser.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude, longitude} = pos.coords || {};
+    if (latitude==null || longitude==null) return;
+    const name = nearestStationName(latitude, longitude);
+    if (!name) return;
+
+    // set + persist selection
+    selectedPlace = name;
+    localStorage.setItem('hkoPlace', selectedPlace);
+
+    // update dropdown if it exists
+    const sel = document.getElementById('locSelect');
+    if (sel && [...sel.options].some(o=>o.value===name)){
+      sel.value = name;
+    }
+
+    // re-render temp line using already-fetched rhr (lastRhr)
+    renderTodayMetaWithLastData();
+  }, err=>{
+    // optional: show a gentle message or ignore
+    console.warn('Geolocation denied or failed:', err);
+  }, { enableHighAccuracy:true, timeout:8000, maximumAge:30000 });
+}
+
+// 5) Add a tiny "📍" button next to the location selector (injected, no HTML edit)
+function addLocateButton(){
+  const wrapper = document.getElementById('locWrap');
+  if (!wrapper || document.getElementById('locateBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'locateBtn';
+  btn.type = 'button';
+  btn.textContent = '📍';
+  btn.title = (LANG==='tc' ? '使用我的位置' : 'Use my location');
+  btn.style.border = '1px solid var(--border)';
+  btn.style.background = 'transparent';
+  btn.style.borderRadius = '10px';
+  btn.style.padding = '6px 10px';
+  btn.style.cursor = 'pointer';
+  btn.style.font = 'inherit';
+  btn.style.marginLeft = '2px';
+  btn.addEventListener('click', useMyLocation);
+  wrapper.appendChild(btn);
+}
+
+// Hook into your existing location builder so the button appears automatically
+const _origBuildLocationSelector = buildLocationSelector;
+buildLocationSelector = function(rhr){
+  _origBuildLocationSelector.call(this, rhr);
+  addLocateButton();
+};
   // ---- INIT ----
   applyTheme(themeChoice);          // apply saved theme immediately
   applyStaticLabels();              // build language, theme, and details UI
@@ -823,3 +1009,4 @@
 </script>
 </body>
 </html>
+
